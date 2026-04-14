@@ -17,6 +17,8 @@ class ErrorResponse(BaseModel):
 
 class PipelineResponse(BaseModel):
     transcript: str | None = None
+    intent: str | None = None
+    action: str | None = None
     decision: IntentDecision | None = None
     requires_confirmation: bool = False
     action_status: str = "pending"

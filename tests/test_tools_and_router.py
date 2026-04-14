@@ -35,6 +35,16 @@ def test_file_tool_creates_file_in_output(output_dir: Path) -> None:
     assert result.output_path == str(destination.resolve())
 
 
+def test_file_tool_can_create_folder_in_output(output_dir: Path) -> None:
+    tool = FileTool(output_dir)
+
+    result = tool.create(ActionPayload(filename="notes", content=None))
+
+    destination = output_dir / "notes"
+    assert destination.is_dir()
+    assert result.action == "create_folder"
+
+
 def test_file_tool_rejects_path_traversal(output_dir: Path) -> None:
     tool = FileTool(output_dir)
 
@@ -59,7 +69,7 @@ def test_code_tool_writes_code_and_language_metadata(output_dir: Path) -> None:
 
 
 def test_summary_tool_summarizes_source_text() -> None:
-    tool = SummaryTool()
+    tool = SummaryTool(summarizer=lambda text: "Model summary.")
 
     result = tool.run(
         ActionPayload(
@@ -67,7 +77,7 @@ def test_summary_tool_summarizes_source_text() -> None:
         )
     )
 
-    assert result.content == "Sentence one. Sentence two."
+    assert result.content == "Model summary."
 
 
 def test_router_executes_create_file(output_dir: Path) -> None:

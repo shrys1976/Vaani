@@ -55,6 +55,7 @@ class PipelineService:
         except LLMServiceError as exc:
             return PipelineResponse(
                 transcript=transcript,
+                intent="chat",
                 action_status="error",
                 error=ErrorResponse(code="llm_error", message=str(exc)),
             )
@@ -66,6 +67,8 @@ class PipelineService:
         if decision.requires_confirmation:
             return PipelineResponse(
                 transcript=transcript,
+                intent=decision.intent.value,
+                action=decision.intent.value,
                 decision=decision,
                 requires_confirmation=True,
                 action_status="awaiting_confirmation",
@@ -110,6 +113,8 @@ class PipelineService:
             except LLMServiceError as exc:
                 return PipelineResponse(
                     transcript=transcript,
+                    intent=decision.intent.value,
+                    action="chat_response",
                     decision=decision,
                     requires_confirmation=False,
                     action_status="error",
@@ -119,6 +124,8 @@ class PipelineService:
 
             return PipelineResponse(
                 transcript=transcript,
+                intent=decision.intent.value,
+                action="chat_response",
                 decision=decision,
                 requires_confirmation=False,
                 action_status="completed",
@@ -131,6 +138,8 @@ class PipelineService:
         except ToolExecutionError as exc:
             return PipelineResponse(
                 transcript=transcript,
+                intent=decision.intent.value,
+                action=decision.intent.value,
                 decision=decision,
                 requires_confirmation=decision.requires_confirmation,
                 action_status="error",
@@ -160,6 +169,8 @@ class PipelineService:
 
         return PipelineResponse(
             transcript=transcript,
+            intent=decision.intent.value,
+            action=execution_result.action,
             decision=decision,
             requires_confirmation=decision.requires_confirmation,
             action_status=execution_result.status,

@@ -16,10 +16,17 @@ class FileTool:
         content = payload.content
         if not filename:
             raise ToolExecutionError("Filename is required for file creation.")
-        if content is None:
-            raise ToolExecutionError("Content is required for file creation.")
 
         destination = self._resolve_output_path(filename)
+        if content is None:
+            destination.mkdir(parents=True, exist_ok=True)
+            return ToolExecutionResult(
+                action="create_folder",
+                status="completed",
+                message=f"Created folder at {destination}",
+                output_path=str(destination),
+            )
+
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(content, encoding="utf-8")
 
@@ -32,9 +39,10 @@ class FileTool:
         )
 
     def _resolve_output_path(self, filename: str) -> Path:
-        candidate = (self._output_dir / filename).resolve()
+        normalized = filename.strip()
+        candidate = (self._output_dir / normalized).resolve()
         if candidate == self._output_dir:
-            raise ToolExecutionError("Filename must point to a file inside the output directory.")
+            raise ToolExecutionError("Filename must point to a target inside the output directory.")
         if self._output_dir not in candidate.parents:
             raise ToolExecutionError("File operations are restricted to the output directory.")
         return candidate

@@ -60,6 +60,8 @@ def test_process_audio_returns_awaiting_confirmation_for_write_intent(tmp_path) 
 
     assert response.action_status == "awaiting_confirmation"
     assert response.requires_confirmation is True
+    assert response.intent == "create_file"
+    assert response.action == "create_file"
 
 
 def test_process_audio_executes_summarize_with_uploaded_context(tmp_path) -> None:
@@ -86,6 +88,8 @@ def test_process_audio_executes_summarize_with_uploaded_context(tmp_path) -> Non
     assert response.action_status == "completed"
     assert response.result == "Alpha. Beta."
     assert response.metadata["context_filename"] == "notes.txt"
+    assert response.intent == "summarize"
+    assert response.action == "summarize"
 
 
 def test_execute_action_runs_approved_payload(tmp_path) -> None:
@@ -118,3 +122,4 @@ def test_execute_action_runs_approved_payload(tmp_path) -> None:
 
     assert response.action_status == "completed"
     assert response.metadata["language"] == "python"
+    assert response.action == "write_code"

@@ -23,10 +23,11 @@ def get_llm_service() -> LLMService:
 @lru_cache(maxsize=1)
 def get_tool_router() -> ToolRouter:
     settings = get_settings()
+    llm_service = get_llm_service()
     return ToolRouter(
         file_tool=FileTool(settings.resolved_output_dir),
         code_tool=CodeTool(settings.resolved_output_dir),
-        summary_tool=SummaryTool(),
+        summary_tool=SummaryTool(summarizer=llm_service.summarize_text),
     )
 
 

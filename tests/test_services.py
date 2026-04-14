@@ -139,3 +139,15 @@ def test_llm_service_raises_on_chat_provider_failure() -> None:
 
     with pytest.raises(LLMServiceError):
         service.generate_chat_response("hello")
+
+
+def test_llm_service_generates_summary() -> None:
+    service = LLMService(
+        settings=build_settings(),
+        parser=IntentParser(),
+        client=FakeGroqClient([make_choice_response("Short summary.")]),
+    )
+
+    result = service.summarize_text("Long text")
+
+    assert result == "Short summary."

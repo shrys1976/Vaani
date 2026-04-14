@@ -119,6 +119,30 @@ class LLMService:
             raise LLMServiceError("LLM provider returned an empty chat response.")
         return content
 
+    def summarize_text(self, text: str) -> str:
+        try:
+            response = self._client.chat.completions.create(
+                model=self._settings.groq_model,
+                temperature=self._settings.llm_temperature,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You summarize text for a local voice agent. "
+                            "Return a concise plain-text summary only, no bullets and no markdown."
+                        ),
+                    },
+                    {"role": "user", "content": text},
+                ],
+            )
+        except Exception as exc:
+            raise LLMServiceError("Failed to generate summary response.") from exc
+
+        content = self._extract_content(response)
+        if not content:
+            raise LLMServiceError("LLM provider returned an empty summary response.")
+        return content
+
     def _request_intent_completion(self, *, transcript: str, retry_mode: bool) -> str:
         prompt = BASE_SYSTEM_PROMPT
         if retry_mode:
