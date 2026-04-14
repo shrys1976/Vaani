@@ -1,0 +1,1 @@
+local ai agent that accepts real-time voice/ mp3 or wav file and execute approprite tools on your computer. 
