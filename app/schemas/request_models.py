@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class IntentType(str, Enum):
@@ -27,10 +27,24 @@ class IntentDecision(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    @field_validator("requires_confirmation")
+    @classmethod
+    def validate_requires_confirmation(cls, value: bool) -> bool:
+        return bool(value)
+
 
 class ExecuteActionRequest(BaseModel):
     transcript: str | None = None
     decision: IntentDecision
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class IntentAnalysisResult(BaseModel):
+    decision: IntentDecision
+    raw_output: str
+    attempts: int = 1
+    used_fallback: bool = False
 
     model_config = ConfigDict(extra="forbid")
