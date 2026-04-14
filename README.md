@@ -1,16 +1,16 @@
 # Vaani
 
-Vaani is a local-only AI voice agent with a FastAPI backend and a separate Gradio client. It accepts audio input, transcribes speech with OpenAI Whisper, classifies intent with Groq, validates the result as structured JSON, and safely routes approved actions to local tools.
+Vaani is a local-only AI voice agent with a FastAPI backend and a separate Gradio client. It accepts audio input, transcribes speech with a local Hugging Face Whisper model, classifies intent with a local Ollama-served model, validates the result as structured JSON, and safely routes approved actions to local tools.
 
 ## Features
 
 - Audio ingestion through a backend `POST /process-audio` pipeline
-- Speech-to-text via OpenAI Whisper
-- Intent classification and chat fallback via Groq
+- Speech-to-text via a local Hugging Face Whisper model
+- Intent classification, chat, and summarization via a local Ollama model
 - Strict JSON parsing and safe fallback behavior
 - Human-in-the-loop approval before any file-writing action
 - Local tool execution restricted to the `output/` directory
-- Model-backed summarization through the Groq service
+- Model-backed summarization through the local Ollama service
 - `create_file` support for both files and folders inside `output/`
 - Separate Gradio interface for analysis, review, approval, and rejection
 
@@ -57,10 +57,13 @@ Accepts an approved action payload and executes it after the UI approval step.
 uv sync --extra dev
 ```
 
-3. Set the required API keys:
+3. Ensure Ollama is installed and serving a local model such as `qwen2.5:3b`.
+4. Use the local defaults from `.env.example`, or customize:
 
-- `OPENAI_API_KEY`
-- `GROQ_API_KEY`
+- `STT_MODEL_ID`
+- `STT_DEVICE`
+- `OLLAMA_BASE_URL`
+- `OLLAMA_MODEL`
 
 ## Running The Backend
 
@@ -69,6 +72,13 @@ uv run uvicorn main:app --reload
 ```
 
 The backend runs by default at `http://127.0.0.1:8000`.
+
+Before starting the backend, make sure Ollama is running locally and the configured model is available. For example:
+
+```bash
+ollama pull qwen2.5:3b
+ollama serve
+```
 
 ## Running The Gradio UI
 
@@ -102,3 +112,9 @@ Run the full test suite with:
 - `summarize`: summarizes transcript or supplied text context with the LLM service
 - `chat`: returns a plain LLM response without tool execution
 - approval remains UI-driven by design, with the Gradio client resubmitting approved payloads
+
+## Local Model Notes
+
+- The default STT model is `openai/whisper-base` running locally through Hugging Face Transformers.
+- The default LLM target is `qwen2.5:3b` through Ollama.
+- The code keeps provider imports lazy so tests stay fast and the app fails with clear runtime messages if the local model dependencies have not been installed yet.
