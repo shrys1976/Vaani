@@ -1,6 +1,6 @@
 from typing import Any, Protocol
 
-from groq import Groq
+import httpx
 
 from app.core.config import Settings
 from app.core.exceptions import LLMServiceError
@@ -44,27 +44,19 @@ Do not add fields outside: intent, requires_confirmation, payload.
 """.strip()
 
 
-class GroqCompletionsAPI(Protocol):
-    def create(self, *, model: str, temperature: float, messages: list[dict[str, str]]) -> Any:
-        """Create a completion through the Groq API."""
-
-
-class GroqChatAPI(Protocol):
-    completions: GroqCompletionsAPI
-
-
-class GroqClientProtocol(Protocol):
-    chat: GroqChatAPI
+class OllamaClientProtocol(Protocol):
+    def post(self, url: str, *, json: dict[str, Any]) -> Any:
+        """Send a chat request to Ollama."""
 
 
 class LLMService:
-    """Groq-backed LLM service for intent classification and chat fallback."""
+    """Ollama-backed LLM service for intent classification and chat fallback."""
 
     def __init__(
         self,
         settings: Settings,
         parser: IntentParser | None = None,
-        client: GroqClientProtocol | None = None,
+        client: OllamaClientProtocol | None = None,
     ) -> None:
         self._settings = settings
         self._parser = parser or IntentParser()
@@ -99,48 +91,36 @@ class LLMService:
         )
 
     def generate_chat_response(self, text: str) -> str:
-        try:
-            response = self._client.chat.completions.create(
-                model=self._settings.groq_model,
-                temperature=self._settings.llm_temperature,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a helpful assistant for a local voice agent UI.",
-                    },
-                    {"role": "user", "content": text},
-                ],
-            )
-        except Exception as exc:
-            raise LLMServiceError("Failed to generate chat response.") from exc
-
-        content = self._extract_content(response)
+        content = self._send_chat(
+            [
+                {
+                    "role": "system",
+                    "content": "You are a helpful assistant for a local voice agent UI.",
+                },
+                {"role": "user", "content": text},
+            ],
+            error_message="Failed to generate chat response.",
+        )
         if not content:
-            raise LLMServiceError("LLM provider returned an empty chat response.")
+            raise LLMServiceError("Ollama returned an empty chat response.")
         return content
 
     def summarize_text(self, text: str) -> str:
-        try:
-            response = self._client.chat.completions.create(
-                model=self._settings.groq_model,
-                temperature=self._settings.llm_temperature,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "You summarize text for a local voice agent. "
-                            "Return a concise plain-text summary only, no bullets and no markdown."
-                        ),
-                    },
-                    {"role": "user", "content": text},
-                ],
-            )
-        except Exception as exc:
-            raise LLMServiceError("Failed to generate summary response.") from exc
-
-        content = self._extract_content(response)
+        content = self._send_chat(
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        "You summarize text for a local voice agent. "
+                        "Return a concise plain-text summary only, no bullets and no markdown."
+                    ),
+                },
+                {"role": "user", "content": text},
+            ],
+            error_message="Failed to generate summary response.",
+        )
         if not content:
-            raise LLMServiceError("LLM provider returned an empty summary response.")
+            raise LLMServiceError("Ollama returned an empty summary response.")
         return content
 
     def _request_intent_completion(self, *, transcript: str, retry_mode: bool) -> str:
@@ -148,37 +128,47 @@ class LLMService:
         if retry_mode:
             prompt = f"{BASE_SYSTEM_PROMPT}\n\n{RETRY_SYSTEM_PROMPT}"
 
-        try:
-            response = self._client.chat.completions.create(
-                model=self._settings.groq_model,
-                temperature=self._settings.llm_temperature,
-                messages=[
-                    {"role": "system", "content": prompt},
-                    {"role": "user", "content": transcript},
-                ],
-            )
-        except Exception as exc:
-            raise LLMServiceError("Failed to analyze transcript with the LLM.") from exc
-
-        content = self._extract_content(response)
+        content = self._send_chat(
+            [
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": transcript},
+            ],
+            error_message="Failed to analyze transcript with the LLM.",
+        )
         if not content:
-            raise LLMServiceError("LLM provider returned an empty structured response.")
+            raise LLMServiceError("Ollama returned an empty structured response.")
         return content
 
+    def _send_chat(self, messages: list[dict[str, str]], *, error_message: str) -> str:
+        try:
+            response = self._client.post(
+                "/api/chat",
+                json={
+                    "model": self._settings.ollama_model,
+                    "messages": messages,
+                    "stream": False,
+                    "options": {"temperature": self._settings.llm_temperature},
+                },
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except Exception as exc:
+            raise LLMServiceError(error_message) from exc
+
+        return self._extract_content(payload)
+
     @staticmethod
-    def _extract_content(response: Any) -> str:
-        choices = getattr(response, "choices", None)
-        if not choices:
+    def _extract_content(payload: Any) -> str:
+        if not isinstance(payload, dict):
             return ""
-
-        message = getattr(choices[0], "message", None)
-        if not message:
+        message = payload.get("message")
+        if not isinstance(message, dict):
             return ""
-
-        content = getattr(message, "content", "")
+        content = message.get("content", "")
         return content.strip() if isinstance(content, str) else ""
 
-    def _build_client(self) -> Groq:
-        if not self._settings.groq_api_key:
-            raise LLMServiceError("GROQ_API_KEY is not configured.")
-        return Groq(api_key=self._settings.groq_api_key)
+    def _build_client(self) -> httpx.Client:
+        return httpx.Client(
+            base_url=self._settings.ollama_base_url.rstrip("/"),
+            timeout=self._settings.request_timeout_seconds,
+        )

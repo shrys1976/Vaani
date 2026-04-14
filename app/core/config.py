@@ -13,11 +13,12 @@ class Settings(BaseSettings):
     api_prefix: str = ""
     output_dir: Path = Field(default_factory=lambda: Path("output"))
 
-    openai_api_key: str | None = None
-    openai_transcription_model: str = "whisper-1"
+    stt_model_id: str = "openai/whisper-base"
+    stt_device: str = "cpu"
+    stt_chunk_length_seconds: int = 30
 
-    groq_api_key: str | None = None
-    groq_model: str = "llama-3.3-70b-versatile"
+    ollama_base_url: str = "http://127.0.0.1:11434"
+    ollama_model: str = "qwen2.5:3b"
 
     llm_temperature: float = 0.0
     llm_max_retries: int = 2

@@ -13,7 +13,7 @@ class StubSTTService:
         self._transcript = transcript
 
     def transcribe(self, *, audio_bytes: bytes, filename: str, content_type: str):
-        return SimpleNamespace(text=self._transcript, model="whisper-1")
+        return SimpleNamespace(text=self._transcript, model="openai/whisper-base")
 
 
 class StubLLMService:

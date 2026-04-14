@@ -9,49 +9,51 @@ from app.services.llm_service import LLMService
 from app.services.stt_service import STTService
 
 
-class FakeTranscriptionsAPI:
+class FakeWhisperPipeline:
     def __init__(self, response: object | Exception) -> None:
         self._response = response
 
-    def create(self, *, file: tuple[str, object, str], model: str) -> object:
+    def __call__(self, inputs: str, **kwargs) -> object:
         if isinstance(self._response, Exception):
             raise self._response
         return self._response
 
 
-class FakeOpenAIClient:
-    def __init__(self, response: object | Exception) -> None:
-        self.audio = SimpleNamespace(transcriptions=FakeTranscriptionsAPI(response))
+class FakeOllamaResponse:
+    def __init__(self, payload: dict | Exception) -> None:
+        self._payload = payload
+
+    def raise_for_status(self) -> None:
+        if isinstance(self._payload, Exception):
+            raise self._payload
+
+    def json(self) -> dict:
+        if isinstance(self._payload, Exception):
+            raise self._payload
+        return self._payload
 
 
-class FakeCompletionsAPI:
+class FakeOllamaClient:
     def __init__(self, responses: list[object | Exception]) -> None:
         self._responses = responses
         self.calls = 0
 
-    def create(self, *, model: str, temperature: float, messages: list[dict[str, str]]) -> object:
+    def post(self, url: str, *, json: dict) -> object:
         response = self._responses[self.calls]
         self.calls += 1
         if isinstance(response, Exception):
             raise response
-        return response
+        return FakeOllamaResponse(response)
 
 
-class FakeGroqClient:
-    def __init__(self, responses: list[object | Exception]) -> None:
-        self.chat = SimpleNamespace(completions=FakeCompletionsAPI(responses))
-
-
-def make_choice_response(content: str) -> object:
-    return SimpleNamespace(
-        choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
-    )
+def make_chat_response(content: str) -> dict:
+    return {"message": {"content": content}}
 
 
 def build_settings() -> Settings:
     return Settings(
-        openai_api_key="test-openai",
-        groq_api_key="test-groq",
+        stt_model_id="openai/whisper-base",
+        ollama_model="qwen2.5:3b",
         llm_max_retries=1,
     )
 
@@ -59,7 +61,7 @@ def build_settings() -> Settings:
 def test_stt_service_transcribes_audio() -> None:
     service = STTService(
         settings=build_settings(),
-        client=FakeOpenAIClient(SimpleNamespace(text="hello world")),
+        client=FakeWhisperPipeline({"text": "hello world"}),
     )
 
     result = service.transcribe(
@@ -69,13 +71,13 @@ def test_stt_service_transcribes_audio() -> None:
     )
 
     assert result.text == "hello world"
-    assert result.model == "whisper-1"
+    assert result.model == "openai/whisper-base"
 
 
 def test_stt_service_raises_on_provider_failure() -> None:
     service = STTService(
         settings=build_settings(),
-        client=FakeOpenAIClient(RuntimeError("boom")),
+        client=FakeWhisperPipeline(RuntimeError("boom")),
     )
 
     with pytest.raises(STTServiceError):
@@ -87,10 +89,10 @@ def test_stt_service_raises_on_provider_failure() -> None:
 
 
 def test_llm_service_retries_and_falls_back_to_chat() -> None:
-    fake_client = FakeGroqClient(
+    fake_client = FakeOllamaClient(
         responses=[
-            make_choice_response("not json"),
-            make_choice_response("still not json"),
+            make_chat_response("not json"),
+            make_chat_response("still not json"),
         ]
     )
     service = LLMService(
@@ -108,10 +110,10 @@ def test_llm_service_retries_and_falls_back_to_chat() -> None:
 
 
 def test_llm_service_returns_valid_intent_after_retry() -> None:
-    fake_client = FakeGroqClient(
+    fake_client = FakeOllamaClient(
         responses=[
-            make_choice_response("not json"),
-            make_choice_response(
+            make_chat_response("not json"),
+            make_chat_response(
                 '{"intent":"summarize","requires_confirmation":true,"payload":{"source_text":"abc"}}'
             ),
         ]
@@ -134,7 +136,7 @@ def test_llm_service_raises_on_chat_provider_failure() -> None:
     service = LLMService(
         settings=build_settings(),
         parser=IntentParser(),
-        client=FakeGroqClient([RuntimeError("boom")]),
+        client=FakeOllamaClient([RuntimeError("boom")]),
     )
 
     with pytest.raises(LLMServiceError):
@@ -145,7 +147,7 @@ def test_llm_service_generates_summary() -> None:
     service = LLMService(
         settings=build_settings(),
         parser=IntentParser(),
-        client=FakeGroqClient([make_choice_response("Short summary.")]),
+        client=FakeOllamaClient([make_chat_response("Short summary.")]),
     )
 
     result = service.summarize_text("Long text")
