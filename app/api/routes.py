@@ -5,7 +5,7 @@ from fastapi.concurrency import run_in_threadpool
 
 from app.api.dependencies import get_pipeline_service
 from app.schemas.request_models import ExecuteActionRequest
-from app.schemas.response_models import HealthResponse
+from app.schemas.response_models import HealthResponse, PipelineResponse
 from app.services.pipeline_service import PipelineService, UploadedTextContext
 
 router = APIRouter()
@@ -16,7 +16,7 @@ async def health_check() -> HealthResponse:
     return HealthResponse(status="ok")
 
 
-@router.post("/process-audio", tags=["pipeline"])
+@router.post("/process-audio", response_model=PipelineResponse, tags=["pipeline"])
 async def process_audio(
     audio: UploadFile = File(...),
     context_text_file: UploadFile | None = File(default=None),
@@ -49,7 +49,7 @@ async def process_audio(
     return response
 
 
-@router.post("/execute-action", tags=["pipeline"])
+@router.post("/execute-action", response_model=PipelineResponse, tags=["pipeline"])
 async def execute_action(
     request: ExecuteActionRequest,
     pipeline_service: PipelineService = Depends(get_pipeline_service),

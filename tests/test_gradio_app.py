@@ -60,7 +60,7 @@ def test_analyze_audio_returns_pending_state(monkeypatch, tmp_path: Path) -> Non
     monkeypatch.setattr(gradio_app.httpx, "Client", lambda timeout: fake_client)
     monkeypatch.setattr(gradio_app, "_build_backend_url", lambda path: f"http://test{path}")
 
-    transcript, intent, status, result, decision_json, error_json, pending_state = gradio_app.analyze_audio(
+    transcript, intent, action, status, result, metadata_json, decision_json, error_json, pending_state = gradio_app.analyze_audio(
         str(audio_path),
         None,
         None,
@@ -68,8 +68,10 @@ def test_analyze_audio_returns_pending_state(monkeypatch, tmp_path: Path) -> Non
 
     assert transcript == "Create a file"
     assert intent == "create_file"
+    assert action == ""
     assert status == "awaiting_confirmation"
     assert result == "Approval required before execution."
+    assert json.loads(metadata_json)["source"] == "backend"
     assert json.loads(decision_json)["payload"]["filename"] == "notes.txt"
     assert error_json == ""
     assert pending_state["decision"]["intent"] == "create_file"
@@ -80,8 +82,10 @@ def test_approve_action_clears_pending_state(monkeypatch) -> None:
         [
             FakeResponse(
                 {
+                    "action": "create_file",
                     "action_status": "completed",
                     "result": "done",
+                    "metadata": {"output_path": "/tmp/notes.txt"},
                     "error": None,
                 }
             )
@@ -91,7 +95,7 @@ def test_approve_action_clears_pending_state(monkeypatch) -> None:
     monkeypatch.setattr(gradio_app.httpx, "Client", lambda timeout: fake_client)
     monkeypatch.setattr(gradio_app, "_build_backend_url", lambda path: f"http://test{path}")
 
-    status, result, error, pending_state_json = gradio_app.approve_action(
+    status, result, metadata, error, pending_state_json = gradio_app.approve_action(
         {
             "transcript": "Create a file",
             "decision": {
@@ -105,14 +109,16 @@ def test_approve_action_clears_pending_state(monkeypatch) -> None:
 
     assert status == "completed"
     assert result == "done"
+    assert json.loads(metadata)["output_path"] == "/tmp/notes.txt"
     assert error == ""
     assert json.loads(pending_state_json) == {}
 
 
 def test_reject_action_resets_state() -> None:
-    status, result, error, pending_state_json = gradio_app.reject_action()
+    status, result, metadata, error, pending_state_json = gradio_app.reject_action()
 
     assert status == "rejected"
     assert result == "Action rejected by user."
+    assert metadata == "{}"
     assert error == ""
     assert json.loads(pending_state_json) == {}

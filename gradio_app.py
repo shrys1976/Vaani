@@ -31,17 +31,25 @@ def _empty_pending_state() -> dict[str, Any]:
     return {}
 
 
+def _serialize_metadata(metadata: dict[str, Any] | None) -> str:
+    if not metadata:
+        return "{}"
+    return json.dumps(metadata, indent=2, sort_keys=True)
+
+
 def analyze_audio(
     audio_path: str | None,
     context_text: str | None,
     context_file_path: str | None,
-) -> tuple[str, str, str, str, str, str, dict[str, Any]]:
+) -> tuple[str, str, str, str, str, str, str, dict[str, Any]]:
     if not audio_path:
         return (
             "",
             "",
+            "",
             "error",
             "",
+            "{}",
             "Please provide audio input before analyzing.",
             "",
             _empty_pending_state(),
@@ -73,8 +81,10 @@ def analyze_audio(
         return (
             "",
             "",
+            "",
             "error",
             "",
+            "{}",
             f"Backend request failed: {exc}",
             "",
             _empty_pending_state(),
@@ -94,17 +104,19 @@ def analyze_audio(
     return (
         payload.get("transcript") or "",
         decision.get("intent") or "",
+        payload.get("action") or "",
         payload.get("action_status") or "",
         payload.get("result") or "",
+        _serialize_metadata(payload.get("metadata")),
         _serialize_decision(decision),
         _serialize_error(payload.get("error")),
         pending_state,
     )
 
 
-def approve_action(pending_state: dict[str, Any] | None) -> tuple[str, str, str, str]:
+def approve_action(pending_state: dict[str, Any] | None) -> tuple[str, str, str, str, str]:
     if not pending_state:
-        return "No pending action to approve.", "", "", json.dumps(_empty_pending_state())
+        return "No pending action to approve.", "", "{}", "", json.dumps(_empty_pending_state())
 
     try:
         with httpx.Client(timeout=60.0) as client:
@@ -115,18 +127,19 @@ def approve_action(pending_state: dict[str, Any] | None) -> tuple[str, str, str,
             response.raise_for_status()
             payload = response.json()
     except httpx.HTTPError as exc:
-        return f"Approval request failed: {exc}", "", "", json.dumps(pending_state, indent=2)
+        return f"Approval request failed: {exc}", "", "{}", "", json.dumps(pending_state, indent=2)
 
     return (
         payload.get("action_status") or "",
         payload.get("result") or "",
+        _serialize_metadata(payload.get("metadata")),
         _serialize_error(payload.get("error")),
         json.dumps(_empty_pending_state()),
     )
 
 
-def reject_action() -> tuple[str, str, str, str]:
-    return "rejected", "Action rejected by user.", "", json.dumps(_empty_pending_state())
+def reject_action() -> tuple[str, str, str, str, str]:
+    return "rejected", "Action rejected by user.", "{}", "", json.dumps(_empty_pending_state())
 
 
 def build_ui() -> gr.Blocks:
@@ -160,9 +173,11 @@ def build_ui() -> gr.Blocks:
             intent_output = gr.Textbox(label="Detected Intent")
 
         with gr.Row():
+            action_output = gr.Textbox(label="Planned Action")
             status_output = gr.Textbox(label="Action Status")
             result_output = gr.Textbox(label="Result", lines=6)
 
+        metadata_output = gr.Code(label="Metadata", language="json")
         decision_output = gr.Code(label="Decision Preview", language="json")
         error_output = gr.Code(label="Error", language="json")
 
@@ -176,8 +191,10 @@ def build_ui() -> gr.Blocks:
             outputs=[
                 transcript_output,
                 intent_output,
+                action_output,
                 status_output,
                 result_output,
+                metadata_output,
                 decision_output,
                 error_output,
                 pending_state,
@@ -187,12 +204,12 @@ def build_ui() -> gr.Blocks:
         approve_button.click(
             fn=approve_action,
             inputs=[pending_state],
-            outputs=[status_output, result_output, error_output, pending_state],
+            outputs=[status_output, result_output, metadata_output, error_output, pending_state],
         )
 
         reject_button.click(
             fn=reject_action,
-            outputs=[status_output, result_output, error_output, pending_state],
+            outputs=[status_output, result_output, metadata_output, error_output, pending_state],
         )
 
     return demo
