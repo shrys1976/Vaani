@@ -5,8 +5,12 @@ build/
 dist/
 wheels/
 *.egg-info
+.pytest_cache/
 
 # Virtual environments
 .venv
+.env
+output/*
+!output/.gitkeep
 plan.md
 .codex
