@@ -1,6 +1,6 @@
 # Vaani
 
-Vaani is a local-first AI voice agent with a FastAPI backend and a separate Gradio client. It accepts audio input, transcribes speech with OpenAI Whisper, classifies intent with Groq, validates the result as structured JSON, and safely routes approved actions to local tools.
+Vaani is a local-only AI voice agent with a FastAPI backend and a separate Gradio client. It accepts audio input, transcribes speech with OpenAI Whisper, classifies intent with Groq, validates the result as structured JSON, and safely routes approved actions to local tools.
 
 ## Features
 
@@ -10,6 +10,8 @@ Vaani is a local-first AI voice agent with a FastAPI backend and a separate Grad
 - Strict JSON parsing and safe fallback behavior
 - Human-in-the-loop approval before any file-writing action
 - Local tool execution restricted to the `output/` directory
+- Model-backed summarization through the Groq service
+- `create_file` support for both files and folders inside `output/`
 - Separate Gradio interface for analysis, review, approval, and rejection
 
 ## Architecture
@@ -33,6 +35,8 @@ Accepts multipart audio and optional summarize context.
 Returns a structured response with:
 
 - `transcript`
+- `intent`
+- `action`
 - `decision`
 - `requires_confirmation`
 - `action_status`
@@ -91,9 +95,10 @@ Run the full test suite with:
 - Invalid LLM JSON is retried and then downgraded to a safe chat fallback
 - Write-style intents require confirmation before execution
 
-## Current v1 Scope
+## Current Local Scope
 
-- `create_file`: writes generic text to `output/`
+- `create_file`: creates folders when only a path is provided, or writes generic text files inside `output/`
 - `write_code`: writes code text to `output/`
-- `summarize`: summarizes transcript or supplied text context
+- `summarize`: summarizes transcript or supplied text context with the LLM service
 - `chat`: returns a plain LLM response without tool execution
+- approval remains UI-driven by design, with the Gradio client resubmitting approved payloads
