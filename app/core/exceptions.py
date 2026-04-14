@@ -12,3 +12,7 @@ class LLMServiceError(VaaniError):
 
 class STTServiceError(VaaniError):
     """Raised when speech-to-text processing fails."""
+
+
+class ToolExecutionError(VaaniError):
+    """Raised when a local tool cannot safely complete the requested action."""

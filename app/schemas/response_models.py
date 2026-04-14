@@ -23,3 +23,12 @@ class PipelineResponse(BaseModel):
     result: str | None = None
     error: ErrorResponse | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ToolExecutionResult(BaseModel):
+    action: str
+    status: str
+    message: str
+    output_path: str | None = None
+    content: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
