@@ -1,38 +1,62 @@
 # Vaani
 
-Vaani is a local-only AI voice agent with a FastAPI backend and a separate Gradio client. It accepts audio input, transcribes speech with a local Hugging Face Whisper model, classifies intent with a local Ollama-served model, validates the result as structured JSON, and safely routes approved actions to local tools.
+Vaani is a local-first AI voice agent with a FastAPI backend and a separate
+Gradio client. It processes local audio input, transcribes speech with a local
+Whisper model, classifies intent with a local Ollama model, validates the
+result as structured JSON, and executes approved actions through safe local
+tools.
 
-## Features
+> This project currently targets a **local-only architecture**.
 
-- Audio ingestion through a backend `POST /process-audio` pipeline
-- Speech-to-text via a local Hugging Face Whisper model
-- Intent classification, chat, and summarization via a local Ollama model
-- Strict JSON parsing and safe fallback behavior
-- Human-in-the-loop approval before any file-writing action
-- Local tool execution restricted to the `output/` directory
-- Model-backed summarization through the local Ollama service
-- `create_file` support for both files and folders inside `output/`
-- Separate Gradio interface for analysis, review, approval, and rejection
+## What It Does
 
-## Architecture
+- Accepts microphone or uploaded audio in the Gradio UI
+- Sends audio to `POST /process-audio` for transcription and intent analysis
+- Produces structured decisions for `create_file`, `write_code`, `summarize`,
+  or `chat`
+- Requires explicit approval before any write-style action
+- Executes tools only inside the local `output/` directory
 
-The backend is organized under `app/`:
+## Current Architecture
 
-- `app/api`: FastAPI routes and dependency wiring
-- `app/core`: config, logging, exceptions, intent parsing, and routing
-- `app/services`: STT, LLM, and pipeline orchestration
-- `app/tools`: local tools for files, code generation, and summarization
-- `app/schemas`: request and response contracts
+### Backend (`app/`)
 
-The UI lives in `gradio_app.py` and communicates with the backend over HTTP.
+- `app/api`: FastAPI routes (`/health`, `/process-audio`, `/execute-action`)
+- `app/core`: settings, logging, exceptions, intent parsing, tool routing
+- `app/services`: STT service, LLM service, pipeline orchestration
+- `app/tools`: file, code, and summary tools
+- `app/schemas`: request and response models
 
-## API Overview
+### Frontend
+
+- `gradio_app.py`: local Gradio UI for analyze, decision review, and
+  approve/reject flow
+
+## Processing Flow
+
+1. Audio is uploaded/recorded in Gradio.
+2. Backend transcribes audio with local Whisper (`transformers` pipeline).
+3. Ollama returns a structured intent response.
+4. Intent parser validates and normalizes JSON output.
+5. If confirmation is required, UI shows decision and waits for approval.
+6. Approved decisions are executed via `/execute-action`.
+7. Tool result is returned and displayed in the UI.
+
+## API Endpoints
+
+### `GET /health`
+
+Basic service health response.
 
 ### `POST /process-audio`
 
-Accepts multipart audio and optional summarize context.
+Multipart request:
 
-Returns a structured response with:
+- `audio` (required)
+- `context_text_file` (optional)
+- `context_text` (optional)
+
+Response includes:
 
 - `transcript`
 - `intent`
@@ -46,75 +70,79 @@ Returns a structured response with:
 
 ### `POST /execute-action`
 
-Accepts an approved action payload and executes it after the UI approval step.
+Accepts approved `decision` payload plus optional transcript/metadata and
+executes the action.
+
+## Local Tool Scope
+
+- `create_file`: creates folders or text files inside `output/`
+- `write_code`: writes code files inside `output/`
+- `summarize`: summarizes transcript or provided context text
+- `chat`: returns non-tool conversational output from the LLM
+
+## Safety Guarantees
+
+- File writes are restricted to `output/`
+- Path traversal and unsafe targets are rejected
+- Invalid LLM JSON is retried, then safely downgraded to chat fallback
+- Write intents require explicit user approval before execution
 
 ## Setup
 
-1. Create a `.env` file from `.env.example`.
+1. Copy environment variables:
+
+```bash
+cp .env.example .env
+```
+
 2. Install dependencies:
 
 ```bash
 uv sync --extra dev
 ```
 
-3. Ensure Ollama is installed and serving a local model such as `qwen2.5:3b`.
-4. Use the local defaults from `.env.example`, or customize:
-
-- `STT_MODEL_ID`
-- `STT_DEVICE`
-- `OLLAMA_BASE_URL`
-- `OLLAMA_MODEL`
-
-## Running The Backend
-
-```bash
-uv run uvicorn main:app --reload
-```
-
-The backend runs by default at `http://127.0.0.1:8000`.
-
-Before starting the backend, make sure Ollama is running locally and the configured model is available. For example:
+3. Pull and run the local Ollama model:
 
 ```bash
 ollama pull qwen2.5:3b
 ollama serve
 ```
 
-## Running The Gradio UI
+## Run
 
-In a second terminal:
+Start backend:
+
+```bash
+uv run uvicorn main:app --reload
+```
+
+Start Gradio UI in a second terminal:
 
 ```bash
 uv run python gradio_app.py
 ```
 
-The Gradio app uses `GRADIO_BACKEND_URL` from your environment and defaults to `http://127.0.0.1:8000`.
+Defaults:
+
+- Backend: `http://127.0.0.1:8000`
+- Gradio backend target: `GRADIO_BACKEND_URL` (default
+  `http://127.0.0.1:8000`)
+
+## Configuration
+
+Key local-first settings in `.env`:
+
+- `STT_MODEL_ID` (default: `openai/whisper-base`)
+- `STT_DEVICE` (default: `cpu`)
+- `STT_CHUNK_LENGTH_SECONDS`
+- `OLLAMA_BASE_URL` (default: `http://127.0.0.1:11434`)
+- `OLLAMA_MODEL` (default: `qwen2.5:3b`)
+- `GRADIO_BACKEND_URL`
 
 ## Testing
 
-Run the full test suite with:
+Run all tests:
 
 ```bash
 ./.venv/bin/python -m pytest -q
 ```
-
-## Safety Model
-
-- File and code writes are restricted to `output/`
-- Path traversal attempts are rejected
-- Invalid LLM JSON is retried and then downgraded to a safe chat fallback
-- Write-style intents require confirmation before execution
-
-## Current Local Scope
-
-- `create_file`: creates folders when only a path is provided, or writes generic text files inside `output/`
-- `write_code`: writes code text to `output/`
-- `summarize`: summarizes transcript or supplied text context with the LLM service
-- `chat`: returns a plain LLM response without tool execution
-- approval remains UI-driven by design, with the Gradio client resubmitting approved payloads
-
-## Local Model Notes
-
-- The default STT model is `openai/whisper-base` running locally through Hugging Face Transformers.
-- The default LLM target is `qwen2.5:3b` through Ollama.
-- The code keeps provider imports lazy so tests stay fast and the app fails with clear runtime messages if the local model dependencies have not been installed yet.
