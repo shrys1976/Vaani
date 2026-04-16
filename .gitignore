@@ -6,7 +6,7 @@ dist/
 wheels/
 *.egg-info
 .pytest_cache/
-
+local_setup.md
 # Virtual environments
 .venv
 .env
